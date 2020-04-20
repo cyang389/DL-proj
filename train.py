@@ -1,4 +1,6 @@
 import os.path as osp
+import argparse
+import sys
 
 import torch
 import torch.nn.functional as F
@@ -11,23 +13,7 @@ import torch_geometric.transforms as T
 from torch_geometric.nn import GCNConv, ChebConv  # noqa
 from torch_geometric.utils import train_test_split_edges
 from model.BaseModel import Net
-
-torch.manual_seed(12345)
-
-dataset = 'Cora'
-path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
-dataset = Planetoid(path, dataset, T.NormalizeFeatures())
-data = dataset[0]
-
-# Train/validation/test
-data.train_mask = data.val_mask = data.test_mask = data.y = None
-data = train_test_split_edges(data)
-
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model, data = Net(data, dataset).to(device), data.to(device)
-optimizer = torch.optim.Adam(params=model.parameters(), lr=0.01)
-
+from process import read_data
 
 def get_link_labels(pos_edge_index, neg_edge_index):
     link_labels = torch.zeros(pos_edge_index.size(1) +
@@ -75,13 +61,39 @@ def test():
         perfs.append(roc_auc_score(link_labels, link_probs))
     return perfs
 
+if __name__ == "__main__":
+    # parse arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--dataset', '-d', default="Cora", type=str, 
+        help='Dataset for training.\nAvailable dataset: Cora, CiteSeer, PubMed',
+    )
+    args = parser.parse_args()
 
-best_val_perf = test_perf = 0
-for epoch in range(1, 501):
-    train_loss = train()
-    val_perf, tmp_test_perf = test()
-    if val_perf > best_val_perf:
-        best_val_perf = val_perf
-        test_perf = tmp_test_perf
-    log = 'Epoch: {:03d}, Loss: {:.4f}, Val: {:.4f}, Test: {:.4f}'
-    print(log.format(epoch, train_loss, best_val_perf, test_perf))
+    # check dataset name
+    if not args.dataset in ['Cora', 'CiteSeer', 'PubMed']:
+        print("Dataset not found.\nAvailable dataset: Cora, CiteSeer, PubMed")
+        sys.exit(0)
+
+    torch.manual_seed(12345)
+
+    # read data from Cora/CiteSeer/PubMed
+    data, dataset = read_data(args.dataset)
+
+    # Train/validation/test
+    data.train_mask = data.val_mask = data.test_mask = data.y = None
+    data = train_test_split_edges(data)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model, data = Net(data, dataset).to(device), data.to(device)
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=0.01)
+
+    best_val_perf = test_perf = 0
+    for epoch in range(1, 501):
+        train_loss = train()
+        val_perf, tmp_test_perf = test()
+        if val_perf > best_val_perf:
+            best_val_perf = val_perf
+            test_perf = tmp_test_perf
+        log = 'Epoch: {:03d}, Loss: {:.4f}, Val: {:.4f}, Test: {:.4f}'
+        print(log.format(epoch, train_loss, best_val_perf, test_perf))
