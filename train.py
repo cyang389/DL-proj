@@ -1,87 +1,74 @@
-import os.path as osp
-
+from YooChooseBinaryDataset import YooChooseBinaryDataset
 import torch
-import torch.nn.functional as F
-from sklearn.metrics import roc_auc_score
-
-from torch_geometric.utils import (negative_sampling, remove_self_loops,
-                                   add_self_loops)
-from torch_geometric.datasets import Planetoid
-import torch_geometric.transforms as T
-from torch_geometric.nn import GCNConv, ChebConv  # noqa
-from torch_geometric.utils import train_test_split_edges
 from model.BaseModel import Net
-
-torch.manual_seed(12345)
-
-dataset = 'Cora'
-path = osp.join(osp.dirname(osp.realpath(__file__)), 'data', dataset)
-dataset = Planetoid(path, dataset, T.NormalizeFeatures())
-data = dataset[0]
-
-# Train/validation/test
-data.train_mask = data.val_mask = data.test_mask = data.y = None
-data = train_test_split_edges(data)
+from torch_geometric.data import DataLoader
+from preprocess import process
+from sklearn.metrics import roc_auc_score
+import numpy as np
 
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model, data = Net(data, dataset).to(device), data.to(device)
-optimizer = torch.optim.Adam(params=model.parameters(), lr=0.01)
+dataset = YooChooseBinaryDataset(root='./')
+dataset = dataset.shuffle()
+train_dataset = dataset[:80000]
+val_dataset = dataset[80000:90000]
+test_dataset = dataset[90000:]
+
+batch_size= 1024
+train_loader = DataLoader(train_dataset, batch_size=batch_size)
+val_loader = DataLoader(val_dataset, batch_size=batch_size)
+test_loader = DataLoader(test_dataset, batch_size=batch_size)
+    
+
+device = torch.device('cuda')
+model = Net().to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
+crit = torch.nn.BCELoss()
 
 
-def get_link_labels(pos_edge_index, neg_edge_index):
-    link_labels = torch.zeros(pos_edge_index.size(1) +
-                              neg_edge_index.size(1)).float().to(device)
-    link_labels[:pos_edge_index.size(1)] = 1.
-    return link_labels
+
+def evaluate(loader):
+    model.eval()
+
+    predictions = []
+    labels = []
+
+    with torch.no_grad():
+        for data in loader:
+
+            data = data.to(device)
+            pred = model(data).detach().cpu().numpy()
+
+            label = data.y.detach().cpu().numpy()
+            predictions.append(pred)
+            labels.append(label)
+
+    predictions = np.hstack(predictions)
+    labels = np.hstack(labels)
+    
+    return roc_auc_score(labels, predictions)
 
 
 def train():
     model.train()
-    optimizer.zero_grad()
 
-    x, pos_edge_index = data.x, data.train_pos_edge_index
-
-    _edge_index, _ = remove_self_loops(pos_edge_index)
-    pos_edge_index_with_self_loops, _ = add_self_loops(_edge_index,
-                                                       num_nodes=x.size(0))
-
-    neg_edge_index = negative_sampling(
-        edge_index=pos_edge_index_with_self_loops, num_nodes=x.size(0),
-        num_neg_samples=pos_edge_index.size(1))
-
-    link_logits = model(pos_edge_index, neg_edge_index)
-    link_labels = get_link_labels(pos_edge_index, neg_edge_index)
-
-    loss = F.binary_cross_entropy_with_logits(link_logits, link_labels)
-    loss.backward()
-    optimizer.step()
-
-    return loss
+    loss_all = 0
+    for data in train_loader:
+        data = data.to(device)
+        optimizer.zero_grad()
+        output = model(data)
+        label = data.y.to(device)
+        loss = crit(output, label)
+        loss.backward()
+        loss_all += data.num_graphs * loss.item()
+        optimizer.step()
+    return loss_all / len(train_dataset)
 
 
-def test():
-    model.eval()
-    perfs = []
-    for prefix in ["val", "test"]:
-        pos_edge_index, neg_edge_index = [
-            index for _, index in data("{}_pos_edge_index".format(prefix),
-                                       "{}_neg_edge_index".format(prefix))
-        ]
-        link_probs = torch.sigmoid(model(pos_edge_index, neg_edge_index))
-        link_labels = get_link_labels(pos_edge_index, neg_edge_index)
-        link_probs = link_probs.detach().cpu().numpy()
-        link_labels = link_labels.detach().cpu().numpy()
-        perfs.append(roc_auc_score(link_labels, link_probs))
-    return perfs
+for epoch in range(1):
+    loss = train()
+    train_acc = evaluate(train_loader)
+    val_acc = evaluate(val_loader)    
+    test_acc = evaluate(test_loader)
+    print('Epoch: {:03d}, Loss: {:.5f}, Train Auc: {:.5f}, Val Auc: {:.5f}, Test Auc: {:.5f}'.
+          format(epoch, loss, train_acc, val_acc, test_acc))
 
-
-best_val_perf = test_perf = 0
-for epoch in range(1, 501):
-    train_loss = train()
-    val_perf, tmp_test_perf = test()
-    if val_perf > best_val_perf:
-        best_val_perf = val_perf
-        test_perf = tmp_test_perf
-    log = 'Epoch: {:03d}, Loss: {:.4f}, Val: {:.4f}, Test: {:.4f}'
-    print(log.format(epoch, train_loss, best_val_perf, test_perf))
