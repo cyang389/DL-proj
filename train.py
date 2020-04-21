@@ -11,6 +11,7 @@ import torch_geometric.transforms as T
 from torch_geometric.nn import GCNConv, ChebConv  # noqa
 from torch_geometric.utils import train_test_split_edges
 from model.BaseModel import Net
+from model.GCN_3_layers import GNet
 
 torch.manual_seed(12345)
 
@@ -23,11 +24,12 @@ data = dataset[0]
 data.train_mask = data.val_mask = data.test_mask = data.y = None
 data = train_test_split_edges(data)
 
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model, data = Net(data, dataset).to(device), data.to(device)
-optimizer = torch.optim.Adam(params=model.parameters(), lr=0.01)
+model, data = GNet(data, dataset).to(device), data.to(device)
+optimizer = torch.optim.Adam(params=model.parameters(), lr=0.001)
 
+decayRate = 0.96
+# my_lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [30, 100, 300, 500] , gamma=0.1)
 
 def get_link_labels(pos_edge_index, neg_edge_index):
     link_labels = torch.zeros(pos_edge_index.size(1) +
@@ -77,11 +79,12 @@ def test():
 
 
 best_val_perf = test_perf = 0
-for epoch in range(1, 501):
+for epoch in range(1, 1000):
     train_loss = train()
     val_perf, tmp_test_perf = test()
     if val_perf > best_val_perf:
         best_val_perf = val_perf
         test_perf = tmp_test_perf
+    # my_lr_scheduler.step()
     log = 'Epoch: {:03d}, Loss: {:.4f}, Val: {:.4f}, Test: {:.4f}'
     print(log.format(epoch, train_loss, best_val_perf, test_perf))
