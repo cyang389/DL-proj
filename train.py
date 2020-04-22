@@ -1,6 +1,7 @@
 from YooChooseBinaryDataset import YooChooseBinaryDataset
 import torch
-from model.BaseModel import Net
+# from model.BaseModel import Net
+from model.Model3 import Net
 from torch_geometric.data import DataLoader
 from preprocess import process
 from sklearn.metrics import roc_auc_score
@@ -64,7 +65,7 @@ def train():
     return loss_all / len(train_dataset)
 
 
-for epoch in range(1):
+for epoch in range(100):
     loss = train()
     train_acc = evaluate(train_loader)
     val_acc = evaluate(val_loader)    
