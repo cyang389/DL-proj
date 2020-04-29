@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-files = ['GCN1', 'GCN2', 'GIN', 'SAGEConv']
+files = ['GCN1', 'GCN2', 'GIN1',  'GIN2', 'GraphSAGE1', 'GraphSAGE2']
 
 epochs = 50
 plt.figure(0)
