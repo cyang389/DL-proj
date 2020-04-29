@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-files = ['GCN', 'GIN', 'SAGEConv']
+files = ['GCN1', 'GCN2', 'GIN', 'SAGEConv']
 
 epochs = 50
 plt.figure(0)
@@ -54,9 +54,14 @@ for f_ in files:
 plt.figure(0)
 plt.legend()
 plt.figure(1)
+plt.ylim(0.5, 1)
 plt.legend()
 plt.figure(2)
+plt.ylim(0.5, 1)
+
 plt.legend()
 plt.figure(3)
+plt.ylim(0.5, 1)
+
 plt.legend()
 plt.show()

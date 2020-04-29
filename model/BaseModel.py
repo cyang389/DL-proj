@@ -52,8 +52,8 @@ class AidsModel(torch.nn.Module):
         self.conv1 = GCNConv(in_channels, 128)
         self.conv2 = GCNConv(128, 64)
         # self.pool2 = SAGPooling(64, min_score=1e-3, GNN=GCNConv)
-        self.lin1 = nn.Linear(64, 16)
-        self.lin2 = nn.Linear(16, 1)
+        self.lin1 = nn.Linear(64, 1)
+        # self.lin2 = nn.Linear(16, 1)
         self.sig = nn.Sigmoid()
 
     def forward(self, data):
@@ -64,6 +64,6 @@ class AidsModel(torch.nn.Module):
         x = F.relu(self.conv2(x.float(), edge_index))
         # x, edge_index, _, batch, _, _ = self.pool2(x, edge_index, None, batch)
         x = F.relu(self.lin1(x))
-        x = F.relu(self.lin2(x))
+        # x = F.relu(self.lin2(x))
         x = self.sig(x)
         return x
