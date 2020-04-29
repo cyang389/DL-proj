@@ -2,9 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-files = ['gcn', 'gcn2']
+files = ['GCN', 'GIN', 'SAGEConv']
 
-epochs = 20
+epochs = 50
 plt.figure(0)
 plt.xlabel('epoch')
 plt.ylabel('loss')
