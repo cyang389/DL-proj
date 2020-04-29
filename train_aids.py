@@ -8,6 +8,7 @@ from torch_geometric.utils import train_test_split_edges
 from AidsDataset import AidsDataset
 from model.BaseModel import AidsModel
 import numpy as np
+import matplotlib.pyplot as plt
 
 def train():
     model.train()
@@ -18,7 +19,7 @@ def train():
         optimizer.zero_grad()
         output = model(data)
         label = data.y.to(device)
-        loss = F.binary_cross_entropy(output, label)
+        loss = F.binary_cross_entropy(output.float(), label.float())
         loss.backward()
         total_loss += data.num_graphs * loss.item()
         optimizer.step()
@@ -55,13 +56,17 @@ if __name__ == "__main__":
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = AidsModel(dataset.num_features).to(device)
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=5e-3)
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=1e-3)
 
+    f = open("GINConv.txt", "w")
     best_val_perf = test_perf = 0
-    for epoch in range(1, 21):
+    for epoch in range(1, 51):
         train_loss = train()
         train_acc = test(train_loader)
         val_acc = test(val_loader)
         test_acc = test(test_loader)
         log = 'Epoch: {:03d}, Loss: {:.4f}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}'
         print(log.format(epoch, train_loss, train_acc, val_acc, test_acc))
+        f.write(log.format(epoch, train_loss, train_acc, val_acc, test_acc) + '\n')
+    f.close()
+
